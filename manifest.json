@@ -1,0 +1,9 @@
+{
+  "name": "CarPlaVL - Placar de Vôlei",
+  "short_name": "CarPlaVL",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#12161B",
+  "theme_color": "#12161B"
+}
