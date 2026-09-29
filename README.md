@@ -1,4 +1,4 @@
-#CarPlaVL - Placar de Vôlei
+#BolleyVall_Placar - Placar de Vôlei
 
 PWA simples para marcar pontos de partidas de vôlei amador, pensada para ser usada com o celular deitado (fisicamente na horizontal).
 
