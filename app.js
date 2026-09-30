@@ -261,7 +261,7 @@
 
   // --easter egg, parte feito com claudinho, pode ter bug
   document.getElementById('gameReplay').addEventListener('click', startBallGame);
-  const BASE_GRAVITY = isMobile ? 0.03 : 0.03;
+  const BASE_GRAVITY = isMobile ? 0.03 : 0.07;
   const canvas = document.getElementById('ballCanvas');
   const gctx = canvas.getContext('2d');
   
