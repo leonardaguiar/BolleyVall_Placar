@@ -50,7 +50,8 @@
       const s = JSON.parse(raw);
       state.a = s.a||0; state.b = s.b||0; state.seconds = s.seconds||0;
       scoreEl.a.textContent = state.a; scoreEl.b.textContent = state.b;
-      timerEl.textContent = fmt(state.seconds);
+      fitScore('a'); fitScore('b');
+      timerEl.textContent = fmt(state.seconds);      
       if(s.nameA) nameEl.a.textContent = s.nameA;
       if(s.nameB) nameEl.b.textContent = s.nameB;
       if(s.colorA) document.documentElement.style.setProperty('--team-a', s.colorA);
@@ -92,10 +93,16 @@
     scoreEl[key].classList.add('pulse');
     setTimeout(()=>scoreEl[key].classList.remove('pulse'),120);
   }
+  function fitScore(key){
+  const digits = String(state[key]).length;
+  const scale = digits <= 2 ? 1 : digits === 3 ? 0.72 : 0.55;
+  scoreEl[key].style.fontSize = 'min('+(46*scale)+'vh, '+(30*scale)+'vw)';
+  }
   function addPoint(key, delta){
     state[key] = Math.max(0, state[key]+delta);
     scoreEl[key].textContent = state[key];
     pulse(key);
+    fitScore(key);
     if(!state.running) startTimer();
     saveState();
   }
@@ -174,4 +181,47 @@
   });
 
   loadState();
+  const installBtn = document.getElementById('installBtn');
+  const installOverlay = document.getElementById('installOverlay');
+  const installText = document.getElementById('installText');
+  const installConfirm = document.getElementById('installConfirm');
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', e=>{
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+
+  if(isMobile && !isStandalone) installBtn.classList.remove('hidden');
+
+  installBtn.addEventListener('click', ()=>{
+    if(isIOS){
+      installText.textContent = 'No iPhone/iPad: toque no ícone de Compartilhar (□ com seta pra cima) na barra do Safari e depois em "Adicionar à Tela de Início".';
+      installConfirm.style.display = 'none';
+    }else if(deferredPrompt){
+      installText.textContent = 'Instalar este app na tela inicial, para acesso rápido e em tela cheia?';
+      installConfirm.style.display = '';
+    }else{
+      installText.textContent = 'Abra o menu (⋮) do navegador e toque em "Instalar app" ou "Adicionar à tela inicial".';
+      installConfirm.style.display = 'none';
+    }
+    installOverlay.classList.add('open');
+  });
+
+  installCancel.addEventListener('click', ()=> installOverlay.classList.remove('open')); 
+
+  installConfirm.addEventListener('click', async ()=>{
+    if(!deferredPrompt) return;
+    installOverlay.classList.remove('open');
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    installBtn.classList.add('hidden');
+  });
+
+  window.addEventListener('appinstalled', ()=> installBtn.classList.add('hidden'));
 })();

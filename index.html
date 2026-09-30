@@ -10,6 +10,13 @@
 <link rel="icon" type="image/png" href="./favicon.png">
 <title>BolleyVall Placar</title>
 <style>
+  @font-face{
+  font-family:'DSEG7';
+  src:url('fonts/DSEG7Classic-Regular.woff2') format('woff2');
+  font-weight:400;
+  font-style:normal;
+  font-display:swap;
+}
   :root{
     --bg:#12161B;
     --court:#1B2129;
@@ -105,7 +112,7 @@
     letter-spacing:.03em;margin-top:2px;cursor:pointer;padding:2px 6px;
   }
 
-  main{flex:1 1 auto;display:flex;min-height:0;}
+  main{flex:1 1 auto;display:flex;min-height:0;position:relative;}
   .panel{
     flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
     position:relative;cursor:pointer;
@@ -114,13 +121,29 @@
   .panel.a{--panel-c:var(--team-a);--panel-c-dim:var(--team-a-dim);}
   .panel.b{--panel-c:var(--team-b);--panel-c-dim:var(--team-b-dim);}
   .score{
-    font-family:'Oswald','Inter',sans-serif;font-weight:600;
-    font-size:min(38vh,26vw);line-height:1;color:#0E1116;
+    font-family:'DSEG7','Oswald','Inter',sans-serif;font-weight:400;
+    font-size:min(46vh,30vw);line-height:1;color:#FFFFFF;
+    text-shadow:0 2px 10px rgba(0,0,0,.4);
     transition:transform .12s ease;
   }
   .score.pulse{transform:scale(1.12);}
   .hint{position:absolute;bottom:10px;font-size:11px;color:rgba(14,17,22,.55);letter-spacing:.03em;}
   .divider{width:2px;background:var(--line);flex:0 0 auto;}
+
+  .install-btn{
+    position:absolute;bottom:24px;left:50%;transform:translate(-50%,-50%);
+    width:44px;height:44px;border-radius:50%;
+    border:1px solid var(--line);background:var(--court);color:var(--ink);
+    font-size:18px;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;z-index:3;
+    animation:pulse-ring 2.4s ease-out infinite;
+  }
+  .install-btn.hidden{display:none;}
+  @keyframes pulse-ring{
+    0%{box-shadow:0 0 0 0 rgba(76,175,107,.45);}
+    70%{box-shadow:0 0 0 14px rgba(76,175,107,0);}
+    100%{box-shadow:0 0 0 0 rgba(76,175,107,0);}
+  }
 
   .stepper{
     position:absolute;
@@ -193,6 +216,7 @@
       <div class="hint">toque no campo para somar 1</div>
     </div>
     <div class="divider"></div>
+    <button class="install-btn hidden" id="installBtn" title="Instalar app" aria-label="Instalar app">⬇</button>
     <div class="panel b" id="panelB">
       <div class="stepper">
         <button class="up" data-key="b" data-delta="1">▲</button>
@@ -209,6 +233,15 @@
       <div class="modal-actions">
         <button id="cancelReset">Cancelar</button>
         <button class="confirm" id="confirmReset">Zerar</button>
+      </div>
+    </div>
+  </div>
+   <div class="modal-overlay" id="installOverlay">
+    <div class="modal">
+      <p id="installText">Instale este app na tela inicial para acesso rápido e em tela cheia.</p>
+      <div class="modal-actions">
+        <button id="installCancel">Fechar</button>
+        <button class="confirm" id="installConfirm" style="background:#2F6FED;border-color:#2F6FED;">Instalar</button>
       </div>
     </div>
   </div>
