@@ -183,8 +183,9 @@
   }
   .modal-actions .confirm{background:#C0392B;border-color:#C0392B;color:#fff;font-weight:600;}
   .version-tag{
-    font-size:14px;color:var(--ink-est);opacity:.55;margin-top:2px;
-    cursor:default;user-select:none;
+    position:absolute;bottom:4px;left:50%;transform:translateX(-50%);
+    font-size:16px;color:var(--ink-est);opacity:.55;font-weight:700;
+    cursor:default;user-select:none;z-index:2;
   }
   .version-tag.wiggle{animation:tag-wiggle .35s ease;}
   @keyframes tag-wiggle{
@@ -209,8 +210,7 @@
 
     <div class="mid-col">
       <div class="timer" id="timer">00:00</div>
-      <button class="reset-btn" id="resetBtn">zerar placar</button>
-      <span class="version-tag" id="versionTag">v1.0</span>
+      <button class="reset-btn" id="resetBtn">zerar placar</button>     
     </div>
 
     <div class="name-block b">
@@ -233,6 +233,7 @@
     </div>
     <div class="divider"></div>
     <button class="install-btn hidden" id="installBtn" title="Instalar app" aria-label="Instalar app">⬇</button>
+    <span class="version-tag" id="versionTag">v1.0</span>
     <div class="panel b" id="panelB">
       <div class="stepper">
         <button class="up" data-key="b" data-delta="1">▲</button>

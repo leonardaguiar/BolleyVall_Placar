@@ -261,7 +261,7 @@
 
   // --easter egg, parte feito com claudinho, pode ter bug
   document.getElementById('gameReplay').addEventListener('click', startBallGame);
-  const BASE_GRAVITY = isMobile ? 0.06 : 0.09;
+  const BASE_GRAVITY = isMobile ? 0.03 : 0.03;
   const canvas = document.getElementById('ballCanvas');
   const gctx = canvas.getContext('2d');
   
@@ -281,8 +281,7 @@
   }
    function hitBall(e){
     if(gameOver) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const x = e.offsetX, y = e.offsetY;
     const hitRadius = ball.r + 18;
     const dx = x - ball.x, dy = y - ball.y;
     if(Math.sqrt(dx*dx + dy*dy) >= hitRadius) return;
@@ -310,7 +309,8 @@
   }
   function loopGame(){
     gctx.clearRect(0,0,canvas.width,canvas.height);
-    ball.vy += 0.28;
+    const difficulty = 1 + Math.floor(gameScoreVal/20)*0.15;
+    ball.vy += BASE_GRAVITY * difficulty;
     ball.vx *= 0.995;
     ball.x += ball.vx;
     ball.y += ball.vy;
