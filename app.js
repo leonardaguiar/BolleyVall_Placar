@@ -261,13 +261,14 @@
 
   // --easter egg, parte feito com claudinho, pode ter bug
   document.getElementById('gameReplay').addEventListener('click', startBallGame);
+  const BASE_GRAVITY = isMobile ? 0.06 : 0.09;
   const canvas = document.getElementById('ballCanvas');
   const gctx = canvas.getContext('2d');
-  const BASE_GRAVITY = isMobile ? 0.12 : 0.16;
+  
   let ball, gameScoreVal = 0, gameOver = false, gameRAF = null;
 
  function startBallGame(){
-    ball = { x:130, y:60, vy:0, vx:0, r:16 };
+    ball = { x:150, y:60, vy:0, vx:0, r:16 };
     gameScoreVal = 0; gameOver = false;
     document.getElementById('gameScore').textContent = 'Pontos: 0';
     document.getElementById('gameReplay').style.display = 'none';
@@ -309,11 +310,11 @@
   }
   function loopGame(){
     gctx.clearRect(0,0,canvas.width,canvas.height);
-    const difficulty = 1 + Math.floor(gameScoreVal/20)*0.15;
-    ball.vy += BASE_GRAVITY * difficulty;
+    ball.vy += 0.28;
     ball.vx *= 0.995;
     ball.x += ball.vx;
     ball.y += ball.vy;
+    if(ball.y - ball.r < 0){ ball.y = ball.r; ball.vy = 0; }
 
     const outBottom = ball.y - ball.r > canvas.height;
     const outSide = ball.x + ball.r < 0 || ball.x - ball.r > canvas.width;

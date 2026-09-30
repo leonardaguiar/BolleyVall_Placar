@@ -173,7 +173,7 @@
   .modal-overlay.open{display:flex;}
   .modal{
     background:var(--court);border:1px solid var(--line);border-radius:14px;
-    padding:22px;max-width:320px;text-align:center;
+    padding:22px;max-width:380px;text-align:center;
   }
   .modal p{margin:0 0 18px;font-size:15px;color:var(--ink);}
   .modal-actions{display:flex;gap:10px;justify-content:center;}
@@ -183,7 +183,7 @@
   }
   .modal-actions .confirm{background:#C0392B;border-color:#C0392B;color:#fff;font-weight:600;}
   .version-tag{
-    font-size:12px;color:var(--ink-est);opacity:.55;margin-top:2px;
+    font-size:14px;color:var(--ink-est);opacity:.55;margin-top:2px;
     cursor:default;user-select:none;
   }
   .version-tag.wiggle{animation:tag-wiggle .35s ease;}
@@ -262,7 +262,7 @@
         </div>
       </div>
       <div id="easterGame" style="display:none;">
-        <canvas id="ballCanvas" width="260" height="260" style="background:var(--bg);border-radius:10px;touch-action:none;"></canvas>
+        <canvas id="ballCanvas" width="300" height="300" style="background:var(--bg);border-radius:10px;touch-action:none;"></canvas>
         <p id="gameScore" style="margin:10px 0 0;font-size:14px;">Pontos: 0</p>
          <div class="modal-actions">
           <button id="easterGameClose">Fechar</button>
