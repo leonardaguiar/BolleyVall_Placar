@@ -263,6 +263,7 @@
   document.getElementById('gameReplay').addEventListener('click', startBallGame);
   const canvas = document.getElementById('ballCanvas');
   const gctx = canvas.getContext('2d');
+  const BASE_GRAVITY = isMobile ? 0.12 : 0.16;
   let ball, gameScoreVal = 0, gameOver = false, gameRAF = null;
 
  function startBallGame(){
@@ -308,7 +309,8 @@
   }
   function loopGame(){
     gctx.clearRect(0,0,canvas.width,canvas.height);
-    ball.vy += 0.28;
+    const difficulty = 1 + Math.floor(gameScoreVal/20)*0.15;
+    ball.vy += BASE_GRAVITY * difficulty;
     ball.vx *= 0.995;
     ball.x += ball.vx;
     ball.y += ball.vy;
