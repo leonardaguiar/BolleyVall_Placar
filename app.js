@@ -225,4 +225,105 @@
   });
 
   window.addEventListener('appinstalled', ()=> installBtn.classList.add('hidden'));
+
+  // --- easter egg: 3 toques no "v1.0" ---
+  const versionTag = document.getElementById('versionTag');
+  const easterOverlay = document.getElementById('easterOverlay');
+  const easterCredits = document.getElementById('easterCredits');
+  const easterGame = document.getElementById('easterGame');
+  let tapCount = 0, tapTimer = null;
+
+  versionTag.addEventListener('click', ()=>{
+    versionTag.classList.remove('wiggle');
+    void versionTag.offsetWidth; // reinicia a animação
+    versionTag.classList.add('wiggle');
+    tapCount++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(()=> tapCount = 0, 1500);
+    if(tapCount >= 3){
+      tapCount = 0;
+      easterCredits.style.display = '';
+      easterGame.style.display = 'none';
+      easterOverlay.classList.add('open');
+    }
+  });
+
+  document.getElementById('easterClose').addEventListener('click', ()=> easterOverlay.classList.remove('open'));
+  document.getElementById('easterGameClose').addEventListener('click', ()=>{
+    easterOverlay.classList.remove('open');
+    stopBallGame();
+  });
+  document.getElementById('easterPlay').addEventListener('click', ()=>{
+    easterCredits.style.display = 'none';
+    easterGame.style.display = '';
+    startBallGame();
+  });
+
+  // --easter egg, parte feito com claudinho, pode ter bug
+  document.getElementById('gameReplay').addEventListener('click', startBallGame);
+  const canvas = document.getElementById('ballCanvas');
+  const gctx = canvas.getContext('2d');
+  let ball, gameScoreVal = 0, gameOver = false, gameRAF = null;
+
+ function startBallGame(){
+    ball = { x:130, y:60, vy:0, vx:0, r:16 };
+    gameScoreVal = 0; gameOver = false;
+    document.getElementById('gameScore').textContent = 'Pontos: 0';
+    document.getElementById('gameReplay').style.display = 'none';
+    canvas.onpointerdown = hitBall;
+    loopGame();
+  }
+  function stopBallGame(){
+    cancelAnimationFrame(gameRAF);
+    canvas.onpointerdown = null;
+  }
+   function hitBall(e){
+    if(gameOver) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const hitRadius = ball.r + 18;
+    const dx = x - ball.x, dy = y - ball.y;
+    if(Math.sqrt(dx*dx + dy*dy) >= hitRadius) return;
+
+    if(dy <= 0){
+      ball.vy += 1.5; // tocou em cima: não sobe, cai mais rápido
+      return;
+    }
+
+    const tx = dx / hitRadius; // -1 (esquerda) a 1 (direita)
+    const absTx = Math.abs(tx);
+    if(absTx < 0.3){
+      ball.vx = -tx * 3;  // quase no centro: sobe reto
+      ball.vy = -9;
+    }else if(absTx < 0.65){
+      ball.vx = -tx * 8;  // deslocado: desvia suave pro lado oposto
+      ball.vy = -8;
+    }else{
+      ball.vx = tx * 22;  // lateral: sai rápido pro lado tocado
+      ball.vy = -3;
+    }
+
+    gameScoreVal++;
+    document.getElementById('gameScore').textContent = 'Pontos: '+gameScoreVal;
+  }
+  function loopGame(){
+    gctx.clearRect(0,0,canvas.width,canvas.height);
+    ball.vy += 0.28;
+    ball.vx *= 0.995;
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    const outBottom = ball.y - ball.r > canvas.height;
+    const outSide = ball.x + ball.r < 0 || ball.x - ball.r > canvas.width;
+    if(outBottom || outSide){
+      gameOver = true;
+      gctx.fillStyle = '#F3F1EA'; gctx.font = '14px Inter,sans-serif'; gctx.textAlign = 'center';
+      gctx.fillText('Fim de jogo!', canvas.width/2, canvas.height/2);
+      document.getElementById('gameReplay').style.display = '';
+      return;
+    }
+    gctx.fillStyle = '#F2A93B';
+    gctx.beginPath(); gctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); gctx.fill();
+    gameRAF = requestAnimationFrame(loopGame);
+  }
 })();
