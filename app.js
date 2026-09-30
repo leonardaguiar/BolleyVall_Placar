@@ -28,7 +28,7 @@
   const nameEl  = { a: document.getElementById('nameA'), b: document.getElementById('nameB') };
   const timerEl = document.getElementById('timer');
 
-  // --- auto-save (rede de segurança contra a aba ser descartada pelo sistema) ---
+  // --- auto-save (rede de segurança contra a aba ser descartada pelo sistema testado no Android e Iphone) ---
   const STORAGE_KEY = 'placar-volei-state-v1';
   function saveState(){
     try{
@@ -181,6 +181,7 @@
   });
 
   loadState();
+  //Esse trecho abaixo de instalação não sei se funciona no Iphone
   const installBtn = document.getElementById('installBtn');
   const installOverlay = document.getElementById('installOverlay');
   const installText = document.getElementById('installText');
