@@ -93,10 +93,10 @@
     scoreEl[key].classList.add('pulse');
     setTimeout(()=>scoreEl[key].classList.remove('pulse'),120);
   }
-  function fitScore(key){
-  const digits = String(state[key]).length;
-  const scale = digits <= 2 ? 1 : digits === 3 ? 0.72 : 0.55;
-  scoreEl[key].style.fontSize = 'min('+(46*scale)+'vh, '+(30*scale)+'vw)';
+ function fitScore(key){
+    const digits = String(state[key]).length;
+    const scale = digits <= 2 ? 1 : digits === 3 ? 0.72 : 0.55;
+    scoreEl[key].style.setProperty('--s', scale);
   }
   function addPoint(key, delta){
     state[key] = Math.max(0, state[key]+delta);
