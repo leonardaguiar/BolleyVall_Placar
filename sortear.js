@@ -59,7 +59,23 @@
   }
 
   // ---------- dupla fixa: monta as equipes uma vez e sorteia a fila ----------
-  function formFixed(P,k,isMixed){
+  function formFixed(P,k,isMixed,cap){
+    if(isMixed && cap){
+      const men = shuffle(P.filter(p=>p.g==='M')), wom = shuffle(P.filter(p=>p.g==='F'));
+      const plan = capPlan(men.length, wom.length, k, cap.N, cap.exact);
+      if(plan.T < 2){
+        throw new Error('Com máximo de '+cap.N+' homens por time ('+(cap.exact ? 'exato' : 'até o máximo')+') só dá para formar '+plan.T+' time(s). São necessários pelo menos 2: ajuste o limite.');
+      }
+      const teams = Array.from({length:plan.T}, ()=>[]);
+      men.slice(0,plan.men).forEach((p,i)=> teams[i % plan.T].push(p));
+      wom.slice(0,plan.women).forEach(p=>{
+        let t = teams[0];
+        for(const x of teams) if(x.length < t.length) t = x;
+        t.push(p);
+      });
+      const reserve = [...men.slice(plan.men), ...wom.slice(plan.women)];
+      return { teams: shuffle(teams), reserve };
+    }
     let pool = shuffle(P);
     const r = pool.length % k;
     const reserve = r ? pool.splice(pool.length-r, r) : [];
@@ -72,9 +88,40 @@
     return { teams: shuffle(teams), reserve };
   }
 
+  // reservas viram "times": grupo completo só com pelo menos 1 mulher (no misto);
+  // sem mulher, divide em grupos menores (no máximo k-1 por grupo)
+  function groupReserve(res,k,isMixed){
+    if(!isMixed){
+      const out = [];
+      for(let i=0;i<res.length;i+=k) out.push(res.slice(i,i+k));
+      return out;
+    }
+    const M = res.filter(p=>p.g==='M'), F = res.filter(p=>p.g==='F'), out = [];
+    while(F.length && M.length+F.length >= k){
+      const g = [F.shift()];
+      while(g.length < k) g.push((M.length >= F.length ? M : F).shift());
+      out.push(g);
+    }
+    const rest = [...M, ...F];
+    if(rest.length){
+      if(F.length || rest.length < k) out.push(rest);
+      else{
+        const n = rest.length, c = Math.ceil(n/(k-1)), base = Math.floor(n/c), extra = n % c;
+        let pos = 0;
+        for(let i=0;i<c;i++){
+          const sz = base + (i < extra ? 1 : 0);
+          out.push(rest.slice(pos,pos+sz));
+          pos += sz;
+        }
+      }
+    }
+    return out;
+  }
+
    // ---------- dupla dinâmica: todas as duplas possíveis, em ordem de fila ----------
   // Prioridades: 1) ninguém repetido em jogos seguidos, 2) cada parceria aparece uma vez,
   // 3) mistas primeiro, 4) participação e espera equilibradas, 5) evitar repetir quem acabou de jogar.
+   // dupla dinâmica sem rodadas: todas as duplas possíveis, em ordem de fila
   function genPairs(P,isMixed){
     const n = P.length;
     const rem = combos(n,2);
@@ -100,13 +147,152 @@
     return seq.map(c=>c.map(i=>P[i]));
   }
 
+    // dupla dinâmica: um jogo por rodada, sem fila (monta as duas duplas do confronto)
+  // Prioridades: 1) ninguém repetido no jogo, 2) parcerias novas, 3) misto,
+  // 4) participação e espera, 5) evitar repetir quem acabou de jogar.
+  function genGames(P,R,isMixed){
+    const n = P.length, total = n*(n-1)/2, limit = R || 80;
+    const times = {}, played = new Array(n).fill(0), rest = new Array(n).fill(0);
+    const prev = new Set(), all = combos(n,2), games = [];
+    let covered = 0;
+
+    const pick = banned=>{
+      let best = null, bs = Infinity;
+      for(const c of all){
+        if(banned && c.some(i=>banned.has(i))) continue;
+        let s = Math.random()*0.5;
+        for(const i of c) s += 10*played[i] - 3*rest[i] + (prev.has(i) ? 2 : 0);
+        s += 1e4*(times[pkey(c[0],c[1])]||0);
+        if(isMixed && P[c[0]].g===P[c[1]].g) s += 1e3;
+        if(s<bs){ bs = s; best = c; }
+      }
+      return best;
+    };
+
+    while(games.length < limit && (R || covered < total)){
+      const X = pick(null), Y = pick(new Set(X));
+      games.push([X,Y]);
+      const on = new Set([...X,...Y]);
+      for(const T of [X,Y]){
+        const key = pkey(T[0],T[1]);
+        if(!times[key]) covered++;
+        times[key] = (times[key]||0)+1;
+      }
+      for(let i=0;i<n;i++){ if(on.has(i)){ played[i]++; rest[i] = 0; } else rest[i]++; }
+      prev.clear(); on.forEach(i=>prev.add(i));
+    }
+    return {
+      games: games.map(([X,Y])=>[X.map(i=>P[i]), Y.map(i=>P[i])]),
+      complete: covered >= total
+    };
+  }
+
+  // ---------- rodadas ----------
+  const pkey = (a,b)=> a<b ? a+'|'+b : b+'|'+a;
+
+  // dupla fixa e trio: equipes novas a cada rodada, evitando repetir parceiros
+  // e dando prioridade a quem ficou de fora na rodada anterior
+   function formRound(P,k,isMixed,hist,cap){
+    let best = null, bs = Infinity;
+    for(let t=0;t<300;t++){
+      const f = formFixed(P,k,isMixed,cap);
+      let s = Math.random()*0.5;
+      for(const team of f.teams)
+        for(let x=0;x<k;x++) for(let y=x+1;y<k;y++)
+          if(hist.pairs.has(pkey(team[x].n,team[y].n))) s += 10;
+      for(const p of f.reserve) s += 20*(hist.sat[p.n]||0);
+      if(s<bs){ bs = s; best = f; }
+    }
+    best.teams.forEach(team=>{
+      for(let x=0;x<k;x++) for(let y=x+1;y<k;y++) hist.pairs.add(pkey(team[x].n,team[y].n));
+    });
+    best.reserve.forEach(p=>{ hist.sat[p.n] = (hist.sat[p.n]||0)+1; });
+    return best;
+  }
+
+  // dupla dinâmica por rodadas: monta as duplas e os confrontos, jogo a jogo
+  function genRounds(P,R,isMixed){
+    const n = P.length, games = Math.floor(n/4);
+    const times = {}, played = new Array(n).fill(0), rest = new Array(n).fill(0);
+    const all = combos(n,2), rounds = [];
+    for(let r=0;r<R;r++){
+      const used = new Set(), list = [];
+      const pick = banned=>{
+        let best = null, bs = Infinity;
+        for(const c of all){
+          if(c.some(i=>banned.has(i))) continue;               // 1: ninguém repetido no jogo
+          let s = Math.random()*0.5;
+          for(const i of c) s += 10*played[i] - 3*rest[i];     // 4: participação e espera
+          s += 1e4*(times[pkey(c[0],c[1])]||0);                // 2: parcerias novas
+          if(isMixed && P[c[0]].g===P[c[1]].g) s += 1e3;       // 3: misto
+          if(s<bs){ bs = s; best = c; }
+        }
+        return best;
+      };
+      for(let g=0;g<games;g++){
+        const X = pick(used); X.forEach(i=>used.add(i));
+        const Y = pick(used); Y.forEach(i=>used.add(i));
+        list.push([X,Y]);
+        for(const T of [X,Y]) times[pkey(T[0],T[1])] = (times[pkey(T[0],T[1])]||0)+1;
+      }
+      for(let i=0;i<n;i++){ if(used.has(i)){ played[i]++; rest[i] = 0; } else rest[i]++; }
+      rounds.push({
+        list: list.map(([X,Y])=>[X.map(i=>P[i]), Y.map(i=>P[i])]),
+        out: P.filter((_,i)=>!used.has(i))
+      });
+    }
+    return rounds;
+  }
+
+  function capPlan(m,f,k,N,exact){
+    if(exact){
+      const T = Math.min(N>0 ? Math.floor(m/N) : Infinity, k-N>0 ? Math.floor(f/(k-N)) : Infinity);
+      return { T, men: T*N, women: T*(k-N) };
+    }
+    let T = Math.floor((m+f)/k);
+    while(T>0 && T*k - Math.min(m,N*T) > f) T--;
+    const men = Math.min(m,N*T);
+    return { T, men, women: T*k - men };
+  }
+  function resolvePlan(m,f,k,N,exact){
+    const plan = capPlan(m,f,k,N,exact);
+    if(plan.T >= 2) return { plan, N, exact, relaxed:false };
+    for(let d=1; d<=k; d++){
+      let best = null;
+      for(const n2 of [N+d, N-d]){
+        if(n2 < 0 || n2 > k) continue;
+        const p = capPlan(m,f,k,n2,exact);
+        if(p.T >= 2 && (!best || p.T > best.plan.T)) best = { plan:p, N:n2, exact, relaxed:true };
+      }
+      if(best) return best;
+    }
+    if(exact){
+      const r = resolvePlan(m,f,k,N,false);   // "Exato" impossível: cai para "Até o máximo"
+      r.relaxed = true;
+      return r;
+    }
+    return { plan, N, exact, relaxed:false };
+  }
+
   // ---------- resultado ----------
   function build(){
     const P = getPlayers();
     const isTrio = trio.checked, k = isTrio ? 3 : 2;
     const isFixed = isTrio || fixed.checked, isMixed = mixed.checked;
     const unit = isTrio ? 'Trio' : 'Dupla';
+    const rv = $('rounds').value.trim(), R = rv ? parseInt(rv,10) : 0;
+    const mraw = $('maxM').value.trim();
+    let cap = null, capNote = '';
+    if(isMixed && isFixed && mraw !== ''){
+      const N0 = Math.min(k, Math.max(0, parseInt(mraw,10) || 0));
+      const ex0 = $('maxMode').value === 'exato';
+      const m = P.filter(p=>p.g==='M').length, f = P.length - m;
+      const r = resolvePlan(m,f,k,N0,ex0);
+      cap = { N: r.N, exact: r.exact };
+      if(r.relaxed) capNote = 'Com essa proporção de homens e mulheres não dá para respeitar o limite de '+N0+(ex0 ? ' (exato)' : '')+' homens por time; foi usado '+r.N+(r.exact ? ' (exato)' : ' (até o máximo)')+'.';
+    }
 
+    if(isNaN(R) || R < 0 || R > 30) throw new Error('Rodadas: informe um número de 1 a 30 (ou deixe vazio).');
     if(isMixed && (!P.some(p=>p.g==='M') || !P.some(p=>p.g==='F'))){
       throw new Error('No sorteio misto, informe homens e mulheres (ou desmarque "Priorizar misto").');
     }
@@ -115,24 +301,52 @@
     }
 
     const nm = t => t.map(p=>p.n).join(' + ');
+    const VS = '\u00A0'.repeat(10)+'vs.';
     const modo = isTrio ? 'Trio (fixo)' : fixed.checked ? 'Dupla fixa' : 'Dupla dinâmica';
     const L = [
       ['title','Sorteio de times'],
-      ['m','Filtros: '+modo+' | Priorizar misto: '+(isMixed ? 'sim' : 'não')+' | '+P.length+' jogadores']
+      ['m','Filtros: '+modo+' | Priorizar misto: '+(isMixed ? 'sim' : 'não')+' | '+P.length+' jogadores'+(R ? ' | Rodadas: '+R : '') +(cap ? ' | Máx. de homens por time: '+cap.N+(cap.exact ? ' (exato)' : ' (até o máximo)') : '')]
     ];
 
-    if(isFixed){
-      const { teams, reserve } = formFixed(P,k,isMixed);
-      L.push(['h','JOGO 1'], ['t',unit+' 1: '+nm(teams[0])], ['t',unit+' 2: '+nm(teams[1])]);
+    if(capNote) L.push(['m',capNote]);
+
+    const addGame = (A,B,u)=> L.push(['t',u+' 1: '+nm(A)], ['t',VS], ['t',u+' 2: '+nm(B)]);
+    const addFixed = f=>{
+      const { teams, reserve } = f;
+      L.push(['h','JOGO 1']);
+      addGame(teams[0],teams[1],unit);
       if(teams.length > 2){
         L.push(['h','FILA (ordem de entrada)']);
         teams.slice(2).forEach((t,i)=> L.push(['t',(i+1)+'º - '+unit+' '+(i+3)+': '+nm(t)]));
       }
-      if(reserve.length) L.push(['h','RESERVAS'], ['t',reserve.map(p=>p.n).join(', ')]);
+      if(reserve.length){
+        L.push(['h','RESERVAS']);
+        groupReserve(reserve,k,isMixed).forEach((g,i)=>
+          L.push(['t',unit+' '+(teams.length+i+1)+': '+nm(g)]));
+      }
+    };
+
+    if(isFixed){
+      if(R){
+        const hist = { pairs: new Set(), sat: {} };
+        for(let r=1;r<=R;r++){
+          L.push(['h','=== RODADA '+r+' ===']);
+          addFixed(formRound(P,k,isMixed,hist,cap))
+        }
+      }else{
+        addFixed(formFixed(P,k,isMixed,cap));
+      }
       L.push(['m','O vencedor enfrenta o próximo da fila.']);
+    }else if(R){
+      const { games } = genGames(P,R,isMixed);
+      games.forEach(([A,B],i)=>{
+        L.push(['h','=== RODADA '+(i+1)+' ===']);
+        addGame(A,B,'Dupla');
+      });
     }else{
       const seq = genPairs(P,isMixed);
-      L.push(['h','JOGO 1'], ['t','Dupla 1: '+nm(seq[0])], ['t','Dupla 2: '+nm(seq[1])]);
+      L.push(['h','JOGO 1']);
+      addGame(seq[0],seq[1],'Dupla');
       if(seq.length > 2){
         L.push(['h','FILA (ordem de entrada)']);
         seq.slice(2).forEach((t,i)=> L.push(['t',(i+1)+'º - Dupla '+(i+3)+': '+nm(t)]));
@@ -202,4 +416,31 @@
     });
     doc.save('sorteio-bolleyvall.pdf');
   });
+    // ---------- limite de homens por time: sugestão automática e aviso ----------
+  let maxTouched = false;
+  function updateMaxUI(){
+    const show = mixed.checked && (trio.checked || fixed.checked);
+    $('maxBox').hidden = !show;
+    if(!show) return;
+    const k = trio.checked ? 3 : 2;
+    const m = parse($('namesM').value).length, f = parse($('namesF').value).length;
+    const mx = $('maxM');
+    mx.max = k;
+    if(!maxTouched) mx.value = (m+f) ? Math.ceil(k*m/(m+f)) : '';
+    const hint = $('maxHint'), raw = mx.value.trim();
+    if(raw === ''){ hint.textContent = 'Sem limite de homens por time.'; return; }
+     const N0 = Math.min(k, Math.max(0, parseInt(raw,10) || 0));
+    const r = resolvePlan(m,f,k,N0,$('maxMode').value === 'exato');
+    const out = (m+f) - r.plan.T*k;
+    let txt = r.plan.T < 2
+      ? 'Com esses valores não dá para formar 2 times.'
+      : 'Serão '+r.plan.T+' times'+(out ? ' e '+out+' jogador(es) ficam de fora.' : '.');
+    if(r.relaxed) txt = 'Com essa proporção não dá para respeitar o limite informado: será usado '+r.N+' homem(ns) por time'+(r.exact ? ' (exato)' : ' (até o máximo)')+'. '+txt;
+    hint.textContent = txt;
+  }
+  ['namesM','namesF'].forEach(id=> $(id).addEventListener('input', updateMaxUI));
+  $('maxM').addEventListener('input', ()=>{ maxTouched = true; updateMaxUI(); });
+  $('maxMode').addEventListener('change', updateMaxUI);
+  [mixed,trio,fixed,dynamic].forEach(el=> el.addEventListener('change', updateMaxUI));
+  updateMaxUI();
 })();

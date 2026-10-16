@@ -63,6 +63,16 @@
     margin:0;white-space:pre-wrap;word-break:break-word;
     font-family:inherit;font-size:14px;line-height:1.5;
   }
+  .field{display:flex;align-items:center;gap:12px;padding:8px 0;font-size:15px;}
+  .field input{
+    width:90px;background:var(--bg);color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;padding:8px;
+    font-size:15px;font-family:inherit;
+  }
+  .field select{
+    background:var(--bg);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px;font-size:15px;font-family:inherit;
+  }
 </style>
 </head>
 <body>
@@ -79,6 +89,24 @@
     <div class="row" id="modeRow">
       <label class="chk"><input type="checkbox" id="fixed"> Dupla fixa</label>
       <label class="chk"><input type="checkbox" id="dynamic" checked> Dupla dinâmica</label>
+    </div>
+    <div class="field">
+      <label for="rounds">Rodadas (opcional)</label>
+      <input type="number" id="rounds" min="1" max="30" inputmode="numeric" placeholder="1 a 30">
+    </div>
+    <div id="maxBox" hidden>
+      <div class="field">
+        <label for="maxM">Máx. de homens por time</label>
+        <input type="number" id="maxM" min="0" max="3" inputmode="numeric" placeholder="sem limite">
+      </div>
+      <div class="field">
+        <label for="maxMode">Regra</label>
+        <select id="maxMode">
+          <option value="ate">Até o máximo</option>
+          <option value="exato">Exato</option>
+        </select>
+      </div>
+      <p class="small" id="maxHint"></p>
     </div>
   </section>
 
