@@ -2,6 +2,7 @@
   const $ = id => document.getElementById(id);
   const mixed = $('mixed'), trio = $('trio'), fixed = $('fixed'), dynamic = $('dynamic');
   let lines = [];
+  let currentPlan = null;   // dados estruturados do sorteio, usados pelo acompanhamento (fila.js)
 
   // ---------- interface ----------
   function syncUI(){
@@ -280,6 +281,18 @@
     const isTrio = trio.checked, k = isTrio ? 3 : 2;
     const isFixed = isTrio || fixed.checked, isMixed = mixed.checked;
     const unit = isTrio ? 'Trio' : 'Dupla';
+    const nomes = time => time.map(p => p.n);
+    const plano = { unit: unit, tamanho: k, fases: [] };
+
+    // trio: os reservas entram no fim da fila como times incompletos
+    const timesDaFila = sorteio => {
+      const times = sorteio.teams.map(nomes);
+      if (isTrio) {
+        groupReserve(sorteio.reserve, k, isMixed).forEach(grupo => times.push(nomes(grupo)));
+      }
+      return times;
+    };
+
     const rv = $('rounds').value.trim(), R = rv ? parseInt(rv,10) : 0;
     const mraw = $('maxM').value.trim();
     let cap = null, capNote = '';
@@ -331,10 +344,14 @@
         const hist = { pairs: new Set(), sat: {} };
         for(let r=1;r<=R;r++){
           L.push(['h','=== RODADA '+r+' ===']);
-          addFixed(formRound(P,k,isMixed,hist,cap))
+          const sorteio = formRound(P,k,isMixed,hist,cap);
+          addFixed(sorteio);
+          plano.fases.push({ titulo: 'Rodada '+r, modo: 'fila', times: timesDaFila(sorteio)});
         }
       }else{
-        addFixed(formFixed(P,k,isMixed,cap));
+        const sorteio = formFixed(P,k,isMixed,cap);
+        addFixed(sorteio);
+        plano.fases.push({ titulo: 'Sorteio', modo: 'fila', times: timesDaFila(sorteio) });
       }
       L.push(['m','O vencedor enfrenta o próximo da fila.']);
     }else if(R){
@@ -342,9 +359,11 @@
       games.forEach(([A,B],i)=>{
         L.push(['h','=== RODADA '+(i+1)+' ===']);
         addGame(A,B,'Dupla');
+        plano.fases.push({ titulo: 'Rodada '+(i+1), modo: 'jogo', times: [nomes(A), nomes(B)] });
       });
     }else{
       const seq = genPairs(P,isMixed);
+      plano.fases.push({ titulo: 'Sorteio', modo: 'fila', times: seq.map(nomes) });
       L.push(['h','JOGO 1']);
       addGame(seq[0],seq[1],'Dupla');
       if(seq.length > 2){
@@ -356,22 +375,35 @@
 
     const body = L.map(x=>x[1]).join('|');
     L.push(['sig','Sorteio gerado pelo app BolleyVall Placar em '+new Date().toLocaleString('pt-BR')+' | Assinatura '+sig(body)]);
+    currentPlan = plano;
     return L;
   }
 
   const toText = L => L.map(([t,s])=>(t==='h' ? '\n' : '')+s).join('\n').replace(/\n{3,}/g,'\n\n');
 
+    // mostra a lista pura do sorteio (a mesma usada em Copiar e PDF)
+   // mostra a lista pura do sorteio; "aberto" define se o bloco aparece expandido
+  function mostrarResultado(aberto){
+    $('err').hidden = true;
+    $('resultText').textContent = toText(lines);
+    $('result').hidden = false;
+    $('result').open = aberto;
+  }
+
   $('go').addEventListener('click', ()=>{
     try{
+      if(Fila.temProgresso() && !confirm('Sortear de novo apaga o acompanhamento atual (fila e resultados). Continuar?')){
+        return;
+      }
       lines = build();
-      $('err').hidden = true;
-      $('resultText').textContent = toText(lines);
-      $('result').hidden = false;
-      $('result').scrollIntoView({behavior:'smooth'});
+      Fila.iniciar(currentPlan, lines);
+      Compartilhar.prepararLink();
+      $('avisoRecebido').hidden = true;
+      mostrarResultado();
+      $('tracker').scrollIntoView({behavior:'smooth'});
     }catch(e){
       $('err').textContent = e.message;
       $('err').hidden = false;
-      $('result').hidden = true;
     }
   });
 
@@ -443,4 +475,42 @@
   $('maxMode').addEventListener('change', updateMaxUI);
   [mixed,trio,fixed,dynamic].forEach(el=> el.addEventListener('change', updateMaxUI));
   updateMaxUI();
+
+  // reabre o último sorteio salvo no aparelho
+   // botão "Compartilhar sorteio"
+  $('shareBtn').addEventListener('click', ()=> Compartilhar.compartilhar($('shareBtn')));
+
+  // ao abrir a página: sorteio recebido por link ou último sorteio salvo no aparelho
+  async function abrirSorteioInicial(){
+    let recebido = null;
+    try{
+      recebido = await Compartilhar.lerDoLink();
+    }catch(e){
+      $('err').textContent = 'Este link de sorteio está incompleto ou inválido.';
+      $('err').hidden = false;
+    }
+
+    // primeiro reabre o que já estava salvo neste aparelho
+    const salvo = Fila.carregar();
+    if(salvo){
+      lines = salvo.linhas;
+      mostrarResultado(false);
+      Compartilhar.prepararLink();
+    }
+    if(!recebido) return;
+
+    // depois aplica o sorteio recebido, pedindo confirmação se houver andamento
+    const podeSubstituir = !Fila.temProgresso()
+      || confirm('Você recebeu um sorteio novo. Isso substitui o acompanhamento atual deste aparelho. Continuar?');
+    if(podeSubstituir){
+      lines = recebido.linhas;
+      Fila.iniciar(recebido.plano, recebido.linhas);
+      mostrarResultado(false);
+      $('avisoRecebido').hidden = false;
+      Compartilhar.prepararLink();
+    }
+    Compartilhar.limparLinkDaBarra();
+  }
+  abrirSorteioInicial();
+  
 })();

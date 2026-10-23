@@ -73,6 +73,35 @@
     background:var(--bg);color:var(--ink);border:1px solid var(--line);
     border-radius:8px;padding:8px;font-size:15px;font-family:inherit;
   }
+
+  .linha{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;}
+  .linha .nome{flex:1;min-width:0;word-break:break-word;}
+  .proximo{border:1px solid var(--accent);border-radius:10px;padding:0 10px;}
+  .jogou .nome{color:var(--ink-dim);text-decoration:line-through;}
+  .vs{text-align:center;color:var(--ink-dim);}
+  .etiqueta{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ink-dim);}
+  .etiqueta.destaque{color:#8FB4FF;}
+  .grupo-botoes{display:flex;gap:6px;}
+  .texto-linha{font-size:14px;padding:2px 0;}
+  .btn-venceu{
+    background:var(--accent);color:#fff;border:0;border-radius:10px;
+    font-weight:700;font-size:14px;min-height:44px;padding:0 14px;cursor:pointer;
+  }
+  .btn-mini{
+    background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:10px;
+    font-weight:700;font-size:13px;min-height:44px;padding:0 10px;cursor:pointer;
+  }
+  .btn-mini:disabled{opacity:.4;}
+
+  #result summary{cursor:pointer;font-weight:700;font-size:15px;padding:4px 0 10px;}
+  #result:not([open]) summary{padding-bottom:0;}
+
+  .actions{flex-wrap:wrap;}
+  .actions .ghost{min-width:130px;}
+  .aviso{
+    background:rgba(47,111,237,.15);border:1px solid var(--accent);
+    border-radius:10px;padding:10px 12px;font-size:14px;margin:14px 0;
+  }
 </style>
 </head>
 <body>
@@ -130,18 +159,30 @@
 
   <div class="err" id="err" hidden></div>
   <button class="primary" id="go">Sortear</button>
+  <div class="aviso" id="avisoRecebido" hidden>
+    Sorteio recebido por link. O acompanhamento começa do zero neste aparelho.
+  </div>
 
-  <section class="card" id="result" hidden style="margin-top:14px;">
-    <h2>Resultado</h2>
+  <details class="card" id="result" hidden>
+    <summary>Lista do sorteio (copiar / PDF)</summary>
     <pre id="resultText"></pre>
     <div class="actions">
       <button class="ghost" id="copyBtn">Copiar</button>
       <button class="ghost" id="pdfBtn">Gerar PDF</button>
+      <button class="ghost" id="shareBtn">Compartilhar sorteio</button>
     </div>
+  </details>
+  <section id="tracker" hidden style="margin-top:14px;">
+    <div class="card" id="trackerQuadra"></div>
+    <div class="card" id="trackerFila"></div>
+    <div class="card" id="trackerHistorico"></div>
+    <div class="card" id="trackerRanking"></div>
   </section>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="fila.js" defer></script>
+<script src="compartilhar.js" defer></script>
 <script src="sortear.js" defer></script>
 </body>
 </html>
