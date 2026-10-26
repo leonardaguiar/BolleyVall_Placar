@@ -18,6 +18,7 @@ const Fila = (function () {
   let plano = null;            // { unit, fases: [{ titulo, modo, times: [[nomes]] }] }
   let estado = null;           // andamento: quadra, fila, histórico e pilha de desfazer
   let linhasDoSorteio = [];    // lista pura do sorteio (para copiar/PDF depois de recarregar)
+  let formularioDoSorteio = null;   // o que foi preenchido na tela no momento do sorteio
 
   const $ = id => document.getElementById(id);
 
@@ -43,9 +44,10 @@ const Fila = (function () {
     };
   }
 
-  function iniciar(novoPlano, linhas) {
+  function iniciar(novoPlano, linhas, formulario)  {
     plano = novoPlano;
     linhasDoSorteio = linhas;
+    formularioDoSorteio = formulario || null;
     estado = {
       faseAtual: 0,
       fases: plano.fases.map(criarEstadoDaFase),
@@ -64,8 +66,9 @@ const Fila = (function () {
       plano = salvo.plano;
       estado = salvo.estado;
       linhasDoSorteio = salvo.linhas;
+      formularioDoSorteio = salvo.formulario || null;
       renderizar();
-      return { linhas: salvo.linhas };
+      return { linhas: salvo.linhas, formulario: formularioDoSorteio };
     } catch (erro) {
       return null;
     }
@@ -76,7 +79,9 @@ const Fila = (function () {
       localStorage.setItem(CHAVE_STORAGE, JSON.stringify({
         plano: plano,
         estado: estado,
-        linhas: linhasDoSorteio
+        linhas: linhasDoSorteio,
+        formulario: formularioDoSorteio
+        
       }));
     } catch (erro) { /* sem localStorage (ex.: aba privada): segue sem salvar */ }
   }
@@ -475,7 +480,7 @@ const Fila = (function () {
 
   // devolve o sorteio atual (sem o andamento), usado para gerar o link de compartilhamento
   function obterSorteio() {
-    return plano ? { plano: plano, linhas: linhasDoSorteio } : null;
+    return plano ? { plano: plano, linhas: linhasDoSorteio, formulario: formularioDoSorteio } : null;
   }
 
   return { iniciar: iniciar, carregar: carregar, temProgresso: temProgresso, obterSorteio: obterSorteio };

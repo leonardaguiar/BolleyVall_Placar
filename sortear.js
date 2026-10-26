@@ -396,7 +396,7 @@
         return;
       }
       lines = build();
-      Fila.iniciar(currentPlan, lines);
+      Fila.iniciar(currentPlan, lines, lerFormulario());
       Compartilhar.prepararLink();
       $('avisoRecebido').hidden = true;
       mostrarResultado();
@@ -476,11 +476,45 @@
   [mixed,trio,fixed,dynamic].forEach(el=> el.addEventListener('change', updateMaxUI));
   updateMaxUI();
 
+    // guarda o que está preenchido na tela (vai junto do sorteio, no link e no salvamento)
+  function lerFormulario(){
+    return {
+      misto: mixed.checked,
+      trio: trio.checked,
+      fixa: fixed.checked,
+      rodadas: $('rounds').value,
+      maxHomens: $('maxM').value,
+      regraMax: $('maxMode').value,
+      todos: $('namesAll').value,
+      homens: $('namesM').value,
+      mulheres: $('namesF').value
+    };
+  }
+
+  // preenche a tela com o formulário de um sorteio recebido ou reaberto
+  function aplicarFormulario(formulario){
+    if(!formulario) return;
+    mixed.checked = formulario.misto;
+    trio.checked = formulario.trio;
+    fixed.checked = formulario.fixa;
+    dynamic.checked = !formulario.fixa;
+    $('rounds').value = formulario.rodadas;
+    $('namesAll').value = formulario.todos;
+    $('namesM').value = formulario.homens;
+    $('namesF').value = formulario.mulheres;
+    $('maxMode').value = formulario.regraMax;
+    $('maxM').value = formulario.maxHomens;
+    maxTouched = true;      // mantém o limite que veio, sem recalcular a sugestão
+    syncUI();
+    updateMaxUI();
+  }
+
   // reabre o último sorteio salvo no aparelho
    // botão "Compartilhar sorteio"
   $('shareBtn').addEventListener('click', ()=> Compartilhar.compartilhar($('shareBtn')));
 
   // ao abrir a página: sorteio recebido por link ou último sorteio salvo no aparelho
+   // ao abrir a página: sorteio recebido por link ou último sorteio salvo no aparelho
   async function abrirSorteioInicial(){
     let recebido = null;
     try{
@@ -494,6 +528,7 @@
     const salvo = Fila.carregar();
     if(salvo){
       lines = salvo.linhas;
+      aplicarFormulario(salvo.formulario);
       mostrarResultado(false);
       Compartilhar.prepararLink();
     }
@@ -504,7 +539,8 @@
       || confirm('Você recebeu um sorteio novo. Isso substitui o acompanhamento atual deste aparelho. Continuar?');
     if(podeSubstituir){
       lines = recebido.linhas;
-      Fila.iniciar(recebido.plano, recebido.linhas);
+      Fila.iniciar(recebido.plano, recebido.linhas, recebido.formulario);
+      aplicarFormulario(recebido.formulario);
       mostrarResultado(false);
       $('avisoRecebido').hidden = false;
       Compartilhar.prepararLink();

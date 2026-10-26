@@ -8,10 +8,14 @@ const Compartilhar = (function () {
 
   const PREFIXO_HASH = '#sorteio=';
   const VERSAO_DO_FORMATO = 1;
+  const ENDERECO_DO_ENCURTADOR = 'https://is.gd/create.php';
+  const TEMPO_MAXIMO_DO_ENCURTADOR_MS = 5000;   // passou disso, usa o link completo
+  const TAMANHO_MAXIMO_PARA_ENCURTAR = 5000;    // limite do is.gd para o link original
 
   // O link é gerado logo depois do sorteio. Assim o botão responde na hora,
   // o que é necessário para o menu de compartilhar do celular abrir.
   let linkPronto = null;
+  let linkCurto = null;   // só existe depois que o is.gd responder; zera a cada sorteio
 
   // ---------- conversões de texto e bytes ----------
   function bytesParaBase64Url(bytes) {
@@ -92,15 +96,38 @@ const Compartilhar = (function () {
       && dados.linhas.every(ehLinhaValida);
   }
 
+    // confere o que veio no link sobre o formulário; aceita só os campos e tipos esperados
+  function limparFormulario(formulario) {
+    if (!formulario || typeof formulario !== 'object') return null;
+    const texto = valor => (typeof valor === 'string' ? valor.slice(0, 5000) : '');
+    return {
+      misto: formulario.misto === true,
+      trio: formulario.trio === true,
+      fixa: formulario.fixa === true,
+      rodadas: texto(formulario.rodadas),
+      maxHomens: texto(formulario.maxHomens),
+      regraMax: formulario.regraMax === 'exato' ? 'exato' : 'ate',
+      todos: texto(formulario.todos),
+      homens: texto(formulario.homens),
+      mulheres: texto(formulario.mulheres)
+    };
+  }
+
   // ---------- gerar o link ----------
   async function gerarLink() {
     const sorteio = Fila.obterSorteio();     // { plano, linhas } ou null
     if (!sorteio) return null;
-    const codigo = await codificar({ v: VERSAO_DO_FORMATO, plano: sorteio.plano, linhas: sorteio.linhas });
+    const codigo = await codificar({
+      v: VERSAO_DO_FORMATO,
+      plano: sorteio.plano,
+      linhas: sorteio.linhas,
+      formulario: sorteio.formulario
+    });
     return location.href.split('#')[0] + PREFIXO_HASH + codigo;
   }
 
   async function prepararLink() {
+    linkCurto = null;
     linkPronto = null;
     try { linkPronto = await gerarLink(); } catch (erro) { linkPronto = null; }
   }
@@ -135,12 +162,62 @@ const Compartilhar = (function () {
     return ehAndroidOuIphone || ehIpadComoMac;
   }
 
-  async function compartilhar(botao) {
-    const link = linkPronto || await gerarLink();
-    if (!link) {
+    // só vale encurtar endereços públicos (não arquivos do disco nem localhost)
+  function ehEnderecoPublico() {
+    const protocoloWeb = location.protocol === 'https:' || location.protocol === 'http:';
+    const ehLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    return protocoloWeb && !ehLocal;
+  }
+
+  function ehLinkCurtoValido(link) {
+    return typeof link === 'string' && /^https:\/\/is\.gd\/[A-Za-z0-9_]+$/.test(link);
+  }
+
+  // Pede o link curto ao is.gd. Devolve null em qualquer problema (sem internet, erro, demora).
+  async function encurtarLink(linkCompleto) {
+    if (!navigator.onLine || !ehEnderecoPublico()) return null;
+    if (linkCompleto.length > TAMANHO_MAXIMO_PARA_ENCURTAR) return null;
+
+    const controle = new AbortController();
+    const cronometro = setTimeout(() => controle.abort(), TEMPO_MAXIMO_DO_ENCURTADOR_MS);
+    try {
+      const endereco = ENDERECO_DO_ENCURTADOR + '?format=json&url=' + encodeURIComponent(linkCompleto);
+      const resposta = await fetch(endereco, { signal: controle.signal, referrerPolicy: 'no-referrer' });
+      if (!resposta.ok) return null;
+      const dados = await resposta.json();
+      return ehLinkCurtoValido(dados.shorturl) ? dados.shorturl : null;
+    } catch (erro) {
+      return null;
+    } finally {
+      clearTimeout(cronometro);
+    }
+  }
+
+  // Devolve { link, curto }: o link curto se der, senão o link completo (que sempre funciona).
+  async function obterLinkParaCompartilhar(botao) {
+    if (linkCurto) return { link: linkCurto, curto: true };
+
+    const textoOriginal = botao.textContent;
+    botao.textContent = 'Gerando link...';
+    botao.disabled = true;
+    try {
+      const linkCompleto = linkPronto || await gerarLink();
+      if (!linkCompleto) return null;
+      linkCurto = await encurtarLink(linkCompleto);
+      return linkCurto ? { link: linkCurto, curto: true } : { link: linkCompleto, curto: false };
+    } finally {
+      botao.textContent = textoOriginal;
+      botao.disabled = false;
+    }
+  }
+
+    async function compartilhar(botao) {
+    const resultado = await obterLinkParaCompartilhar(botao);
+    if (!resultado) {
       alert('Faça o sorteio antes de compartilhar.');
       return;
     }
+    const { link, curto } = resultado;
 
     if (navigator.share && ehCelularOuTablet()) {
       try {
@@ -148,12 +225,13 @@ const Compartilhar = (function () {
         return;
       } catch (erro) {
         if (erro.name === 'AbortError') return;   // a pessoa fechou o menu de compartilhar
-        // qualquer outro erro: cai para copiar o link
+        // outro erro (ex.: o navegador pediu um toque novo): cai para copiar o link
       }
     }
 
     const copiou = await copiarTexto(link);
-    mostrarAvisoNoBotao(botao, copiou ? 'Link copiado!' : 'Não foi possível copiar');
+    const avisoCopiado = curto ? 'Link copiado!' : 'Link completo copiado!';
+    mostrarAvisoNoBotao(botao, copiou ? avisoCopiado : 'Não foi possível copiar');
   }
 
   // ---------- abrir um link recebido ----------
@@ -163,7 +241,7 @@ const Compartilhar = (function () {
     if (location.hash.indexOf(PREFIXO_HASH) !== 0) return null;
     const dados = await decodificar(location.hash.slice(PREFIXO_HASH.length));
     if (!dadosSaoValidos(dados)) throw new Error('Sorteio inválido');
-    return { plano: dados.plano, linhas: dados.linhas };
+    return { plano: dados.plano, linhas: dados.linhas, formulario: limparFormulario(dados.formulario) };
   }
 
   // Tira o código do endereço, para recarregar a página não importar o sorteio de novo.
