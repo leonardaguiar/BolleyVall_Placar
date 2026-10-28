@@ -113,16 +113,67 @@ const Compartilhar = (function () {
     };
   }
 
-  // ---------- gerar o link ----------
-  async function gerarLink() {
-    const sorteio = Fila.obterSorteio();     // { plano, linhas } ou null
+  const ehInteiroEntre = (valor, minimo, maximo) =>
+  Number.isInteger(valor) && valor >= minimo && valor <= maximo;
+
+  function ehFaseDoAndamentoValida(fase, quantidadeDeTimes) {
+    const ehIdDeTime = id => ehInteiroEntre(id, 0, quantidadeDeTimes - 1);
+    return !!fase
+      && Array.isArray(fase.quadra) && fase.quadra.length === 2 && fase.quadra.every(ehIdDeTime)
+      && Array.isArray(fase.fila)
+      && fase.fila.every(item => !!item && ehIdDeTime(item.id) && typeof item.jogou === 'boolean')
+      && !!fase.sequencia && typeof fase.sequencia === 'object'
+      && Object.keys(fase.sequencia).every(chave => Number.isInteger(fase.sequencia[chave]))
+      && fase.quadra.every(id => Number.isInteger(fase.sequencia[id]))
+      && ehInteiroEntre(fase.jogos, 0, 100000)
+      && (fase.vencedor === null || ehIdDeTime(fase.vencedor));
+  }
+
+  function ehJogoDoHistoricoValido(jogo) {
+    return !!jogo
+      && typeof jogo.titulo === 'string'
+      && Number.isInteger(jogo.numero)
+      && typeof jogo.vencedor === 'string'
+      && typeof jogo.perdedor === 'string'
+      && ehListaDeNomes(jogo.vencedores)
+      && ehListaDeNomes(jogo.perdedores);
+  }
+
+  function andamentoEhValido(andamento, plano) {
+    const estado = andamento && andamento.estado;
+    return !!estado
+      && Number.isFinite(andamento.geradoEm)
+      && ehInteiroEntre(estado.faseAtual, 0, plano.fases.length - 1)
+      && Array.isArray(estado.fases)
+      && estado.fases.length === plano.fases.length
+      && estado.fases.every((fase, indice) => ehFaseDoAndamentoValida(fase, plano.fases[indice].times.length))
+      && Array.isArray(estado.historico)
+      && estado.historico.every(ehJogoDoHistoricoValido);
+  }
+
+  // devolve só o que interessa; a pilha de desfazer começa vazia no aparelho que recebe
+  function limparAndamento(andamento) {
+    const estado = andamento.estado;
+    return {
+      geradoEm: andamento.geradoEm,
+      estado: { faseAtual: estado.faseAtual, fases: estado.fases, historico: estado.historico, desfazer: [] }
+    };
+  }
+
+  // Monta o link completo. Com "comAndamento", leva também o andamento atual do baba.
+  async function gerarLink(comAndamento) {
+    const sorteio = Fila.obterSorteio();     // { plano, linhas, formulario } ou null
     if (!sorteio) return null;
-    const codigo = await codificar({
+
+    const dados = {
       v: VERSAO_DO_FORMATO,
       plano: sorteio.plano,
       linhas: sorteio.linhas,
       formulario: sorteio.formulario
-    });
+    };
+    if (comAndamento) dados.andamento = Fila.obterAndamento();
+
+    const codigo = await codificar(dados);
     return location.href.split('#')[0] + PREFIXO_HASH + codigo;
   }
 
@@ -210,28 +261,56 @@ const Compartilhar = (function () {
       botao.disabled = false;
     }
   }
+  // Abre o menu de compartilhar (celular) ou copia o link (PC / sem menu).
+  async function entregarLink(botao, link, curto, titulo) {
+    if (navigator.share && ehCelularOuTablet()) {
+      try {
+        await navigator.share({ title: titulo, text: titulo + ' - BolleyVall Placar', url: link });
+        return;
+      } catch (erro) {
+        if (erro.name === 'AbortError') return;   // a pessoa fechou o menu de compartilhar
+        // outro erro: cai para copiar o link
+      }
+    }
+    const copiou = await copiarTexto(link);
+    const avisoCopiado = curto ? 'Link copiado!' : 'Link completo copiado!';
+    mostrarAvisoNoBotao(botao, copiou ? avisoCopiado : 'Não foi possível copiar');
+  }
 
-    async function compartilhar(botao) {
+  async function compartilhar(botao) {
     const resultado = await obterLinkParaCompartilhar(botao);
     if (!resultado) {
       alert('Faça o sorteio antes de compartilhar.');
       return;
     }
-    const { link, curto } = resultado;
+    await entregarLink(botao, resultado.link, resultado.curto, 'Sorteio de times');
+  }
 
-    if (navigator.share && ehCelularOuTablet()) {
-      try {
-        await navigator.share({ title: 'Sorteio de times', text: 'Sorteio de times - BolleyVall Placar', url: link });
-        return;
-      } catch (erro) {
-        if (erro.name === 'AbortError') return;   // a pessoa fechou o menu de compartilhar
-        // outro erro (ex.: o navegador pediu um toque novo): cai para copiar o link
+  // O andamento muda a cada jogo, então o link é gerado na hora (sem guardar o link curto).
+  async function compartilharAndamento(botao) {
+    const textoOriginal = botao.textContent;
+    botao.textContent = 'Gerando link...';
+    botao.disabled = true;
+
+    let resultado = null;
+    try {
+      const linkCompleto = await gerarLink(true);
+      if (linkCompleto) {
+        const linkEncurtado = await encurtarLink(linkCompleto);
+        resultado = linkEncurtado
+          ? { link: linkEncurtado, curto: true }
+          : { link: linkCompleto, curto: false };
       }
+    } finally {
+      botao.textContent = textoOriginal;
+      botao.disabled = false;
     }
 
-    const copiou = await copiarTexto(link);
-    const avisoCopiado = curto ? 'Link copiado!' : 'Link completo copiado!';
-    mostrarAvisoNoBotao(botao, copiou ? avisoCopiado : 'Não foi possível copiar');
+    if (!resultado) {
+      alert('Não há andamento para compartilhar.');
+      return;
+    }
+    await entregarLink(botao, resultado.link, resultado.curto, 'Andamento do baba');
   }
 
   // ---------- abrir um link recebido ----------
@@ -241,7 +320,18 @@ const Compartilhar = (function () {
     if (location.hash.indexOf(PREFIXO_HASH) !== 0) return null;
     const dados = await decodificar(location.hash.slice(PREFIXO_HASH.length));
     if (!dadosSaoValidos(dados)) throw new Error('Sorteio inválido');
-    return { plano: dados.plano, linhas: dados.linhas, formulario: limparFormulario(dados.formulario) };
+
+    let andamento = null;
+    if (dados.andamento) {
+      if (!andamentoEhValido(dados.andamento, dados.plano)) throw new Error('Andamento inválido');
+      andamento = limparAndamento(dados.andamento);
+    }
+    return {
+      plano: dados.plano,
+      linhas: dados.linhas,
+      formulario: limparFormulario(dados.formulario),
+      andamento: andamento
+    };
   }
 
   // Tira o código do endereço, para recarregar a página não importar o sorteio de novo.
@@ -253,6 +343,7 @@ const Compartilhar = (function () {
     prepararLink: prepararLink,
     compartilhar: compartilhar,
     lerDoLink: lerDoLink,
-    limparLinkDaBarra: limparLinkDaBarra
+    limparLinkDaBarra: limparLinkDaBarra,
+    compartilharAndamento: compartilharAndamento
   };
 })();

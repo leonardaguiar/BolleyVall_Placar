@@ -515,12 +515,58 @@
 
   // ao abrir a página: sorteio recebido por link ou último sorteio salvo no aparelho
    // ao abrir a página: sorteio recebido por link ou último sorteio salvo no aparelho
+   // aviso azul no topo (sorteio recebido, andamento recebido)
+  function mostrarAviso(texto){
+    $('avisoRecebido').textContent = texto;
+    $('avisoRecebido').hidden = false;
+  }
+
+  function horaDoAndamento(andamento){
+    return new Date(andamento.geradoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // aplica um andamento recebido; se este aparelho já tem jogos, pergunta antes de substituir
+  function aplicarAndamentoRecebido(recebido){
+    const jogosNoLink = recebido.andamento.estado.historico.length;
+    const jogosAqui = Fila.quantidadeDeJogos();
+    const hora = horaDoAndamento(recebido.andamento);
+
+    if(jogosAqui > 0){
+      const mensagem = 'Este aparelho tem ' + jogosAqui + ' jogo(s) registrado(s). '
+        + 'O andamento do link (gerado às ' + hora + ') tem ' + jogosNoLink + '. '
+        + 'Usar o do link e substituir o seu?';
+      if(!confirm(mensagem)) return;
+    }
+
+    lines = recebido.linhas;
+    Fila.iniciarComAndamento(recebido.plano, recebido.linhas, recebido.formulario, recebido.andamento);
+    aplicarFormulario(recebido.formulario);
+    mostrarResultado(false);
+    mostrarAviso('Andamento recebido (' + jogosNoLink + ' jogo(s), gerado às ' + hora + '). Você pode continuar daqui.');
+    Compartilhar.prepararLink();
+  }
+
+  // aplica um sorteio recebido (sem andamento); se houver jogos registrados, pergunta antes
+  function aplicarSorteioRecebido(recebido){
+    const podeSubstituir = !Fila.temProgresso()
+      || confirm('Você recebeu um sorteio novo. Isso substitui o acompanhamento atual deste aparelho. Continuar?');
+    if(!podeSubstituir) return;
+
+    lines = recebido.linhas;
+    Fila.iniciar(recebido.plano, recebido.linhas, recebido.formulario);
+    aplicarFormulario(recebido.formulario);
+    mostrarResultado(false);
+    mostrarAviso('Sorteio recebido por link. O acompanhamento começa do zero neste aparelho.');
+    Compartilhar.prepararLink();
+  }
+
+  // ao abrir a página: sorteio/andamento recebido por link, ou último sorteio salvo no aparelho
   async function abrirSorteioInicial(){
     let recebido = null;
     try{
       recebido = await Compartilhar.lerDoLink();
     }catch(e){
-      $('err').textContent = 'Este link de sorteio está incompleto ou inválido.';
+      $('err').textContent = 'Este link está incompleto ou inválido.';
       $('err').hidden = false;
     }
 
@@ -534,16 +580,10 @@
     }
     if(!recebido) return;
 
-    // depois aplica o sorteio recebido, pedindo confirmação se houver andamento
-    const podeSubstituir = !Fila.temProgresso()
-      || confirm('Você recebeu um sorteio novo. Isso substitui o acompanhamento atual deste aparelho. Continuar?');
-    if(podeSubstituir){
-      lines = recebido.linhas;
-      Fila.iniciar(recebido.plano, recebido.linhas, recebido.formulario);
-      aplicarFormulario(recebido.formulario);
-      mostrarResultado(false);
-      $('avisoRecebido').hidden = false;
-      Compartilhar.prepararLink();
+    if(recebido.andamento){
+      aplicarAndamentoRecebido(recebido);
+    }else{
+      aplicarSorteioRecebido(recebido);
     }
     Compartilhar.limparLinkDaBarra();
   }

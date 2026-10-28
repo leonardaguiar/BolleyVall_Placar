@@ -375,6 +375,12 @@ const Fila = (function () {
     }
     caixa.appendChild(controles);
 
+    const linhaCompartilhar = criar('div', 'linha');
+    const botaoCompartilhar = criarBotao('btn-mini', 'Compartilhar andamento', 'compartilhar-andamento');
+    botaoCompartilhar.style.flex = '1';
+    linhaCompartilhar.appendChild(botaoCompartilhar);
+    caixa.appendChild(linhaCompartilhar);
+
     if (dados.modo === 'fila') {
       caixa.appendChild(criar('div', 'etiqueta',
         'O vencedor fica no máximo mais 1 jogo; quem perde vai para o fim da fila'));
@@ -470,6 +476,7 @@ const Fila = (function () {
       case 'rodada-proxima':   mudarRodada(1); break;
       case 'copiar-ranking':   copiarRanking(botao); break;
       case 'pdf-ranking':      gerarPdfDoRanking(); break;
+      case 'compartilhar-andamento':  Compartilhar.compartilharAndamento(botao); break;
     }
   });
 
@@ -483,5 +490,36 @@ const Fila = (function () {
     return plano ? { plano: plano, linhas: linhasDoSorteio, formulario: formularioDoSorteio } : null;
   }
 
-  return { iniciar: iniciar, carregar: carregar, temProgresso: temProgresso, obterSorteio: obterSorteio };
+  function obterAndamento() {
+    if (!estado) return null;
+    return {
+      geradoEm: Date.now(),
+      estado: { faseAtual: estado.faseAtual, fases: estado.fases, historico: estado.historico }
+    };
+  }
+
+  // abre um sorteio recebido já no ponto em que a outra pessoa parou
+  function iniciarComAndamento(novoPlano, linhas, formulario, andamento) {
+    plano = novoPlano;
+    linhasDoSorteio = linhas;
+    formularioDoSorteio = formulario || null;
+    estado = andamento.estado;      // já validado e com a pilha de desfazer vazia
+    salvar();
+    renderizar();
+  }
+
+  function quantidadeDeJogos() {
+    return estado ? estado.historico.length : 0;
+  }
+
+return {
+    iniciar: iniciar,
+    carregar: carregar,
+    temProgresso: temProgresso,
+    obterSorteio: obterSorteio,
+    obterAndamento: obterAndamento,
+    iniciarComAndamento: iniciarComAndamento,
+    quantidadeDeJogos: quantidadeDeJogos
+  };
+
 })();
