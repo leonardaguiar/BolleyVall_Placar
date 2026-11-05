@@ -252,7 +252,7 @@
       <div class="hint">toque no campo para somar 1</div>
     </div>
     <div class="divider"></div>
-    <button class="reset-btn" id="resetBtn">zerar placar</button>
+    <button class="reset-btn" id="resetBtn">Encerrar partida</button>
     <button class="install-btn hidden" id="installBtn" title="Instalar app" aria-label="Instalar app">⬇</button>
     <span class="version-tag" id="versionTag">v1.0</span>
     <div class="panel b" id="panelB">
@@ -267,10 +267,10 @@
 
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal">
-      <p>Zerar o placar e o cronômetro?</p>
+      <p id="resetMessage">Deseja encerrar a partida?</p>
       <div class="modal-actions">
         <button id="cancelReset">Cancelar</button>
-        <button class="confirm" id="confirmReset">Zerar</button>
+        <button class="confirm" id="confirmReset">Encerrar</button>
       </div>
     </div>
   </div>
@@ -304,6 +304,7 @@
   </div>
 </div>
 
+<script src="fila.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>
