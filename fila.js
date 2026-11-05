@@ -12,6 +12,7 @@ const Fila = (function () {
   'use strict';
 
   const CHAVE_STORAGE = 'sorteio-acompanhamento-v1';
+  const CHAVE_PEDIDO_PLACAR = 'placar-encerrar-partida-v1';
   const JOGOS_SEGUIDOS_MAXIMO = 2;   // o jogo em que entrou + uma partida adicional
   const LIMITE_DESFAZER = 30;
 
@@ -21,6 +22,10 @@ const Fila = (function () {
   let formularioDoSorteio = null;   // o que foi preenchido na tela no momento do sorteio
 
   const $ = id => document.getElementById(id);
+
+  function gerarIdPlano() {
+    return 'sorteio-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
 
   // ---------- acesso rápido ao que está em andamento ----------
   const faseAtual = () => estado.fases[estado.faseAtual];
@@ -35,7 +40,14 @@ const Fila = (function () {
     const sequencia = {};
     sequencia[ids[0]] = 1;
     sequencia[ids[1]] = 1;
-    return {
+      window.addEventListener('storage', evento => {
+    if (evento.key !== CHAVE_PEDIDO_PLACAR || !evento.newValue) return;
+    try {
+      const pedido = JSON.parse(evento.newValue);
+      if (carregar()) processarPedidoDeEncerramento(pedido);
+    } catch (erro) {}
+  });
+return {
       quadra: [ids[0], ids[1]],                               // os dois primeiros jogam
       fila: ids.slice(2).map(id => ({ id: id, jogou: false })),
       sequencia: sequencia,                                   // jogos seguidos de cada time em quadra
@@ -46,6 +58,7 @@ const Fila = (function () {
 
   function iniciar(novoPlano, linhas, formulario)  {
     plano = novoPlano;
+    if (!plano.id) plano.id = gerarIdPlano();
     linhasDoSorteio = linhas;
     formularioDoSorteio = formulario || null;
     estado = {
@@ -64,11 +77,19 @@ const Fila = (function () {
       if (!bruto) return null;
       const salvo = JSON.parse(bruto);
       plano = salvo.plano;
+      if (!plano.id) plano.id = gerarIdPlano();
       estado = salvo.estado;
       linhasDoSorteio = salvo.linhas;
       formularioDoSorteio = salvo.formulario || null;
       renderizar();
-      return { linhas: salvo.linhas, formulario: formularioDoSorteio };
+        window.addEventListener('storage', evento => {
+    if (evento.key !== CHAVE_PEDIDO_PLACAR || !evento.newValue) return;
+    try {
+      const pedido = JSON.parse(evento.newValue);
+      if (carregar()) processarPedidoDeEncerramento(pedido);
+    } catch (erro) {}
+  });
+return { linhas: salvo.linhas, formulario: formularioDoSorteio };
     } catch (erro) {
       return null;
     }
@@ -182,6 +203,32 @@ const Fila = (function () {
     finalizarAcao();
   }
 
+  function processarPedidoDeEncerramento(pedido) {
+    if (!pedido || !estado || !plano || !faseAtual()) return false;
+    const fase = faseAtual();
+    const correspondeAoJogo = plano.id === pedido.planoId
+      && estado.faseAtual === pedido.faseAtual
+      && (fase.jogos || 0) === pedido.jogos
+      && JSON.stringify(fase.quadra) === JSON.stringify(pedido.quadra);
+    if (!correspondeAoJogo || !fase.quadra.includes(pedido.idVencedor)) return false;
+    registrarVitoria(pedido.idVencedor);
+    try {
+      if (JSON.parse(localStorage.getItem(CHAVE_PEDIDO_PLACAR) || 'null')?.id === pedido.id) {
+        localStorage.removeItem(CHAVE_PEDIDO_PLACAR);
+      }
+    } catch (erro) {}
+    return true;
+  }
+
+  function processarPedidoPendente() {
+    try {
+      if ((!estado || !plano) && !carregar()) return false;
+      const pedido = JSON.parse(localStorage.getItem(CHAVE_PEDIDO_PLACAR) || 'null');
+      return processarPedidoDeEncerramento(pedido);
+    } catch (erro) {
+      return false;
+    }
+  }
   function alternarJaJogou(id) {
     guardarParaDesfazer();
     const item = faseAtual().fila.find(i => i.id === id);
@@ -313,6 +360,7 @@ const Fila = (function () {
 
   function renderizar() {
     const raiz = $('tracker');
+    if (!raiz) return;
     if (!estado) { raiz.hidden = true; return; }
     raiz.hidden = false;
     renderizarQuadra();
@@ -492,7 +540,14 @@ const Fila = (function () {
 
   function obterAndamento() {
     if (!estado) return null;
-    return {
+      window.addEventListener('storage', evento => {
+    if (evento.key !== CHAVE_PEDIDO_PLACAR || !evento.newValue) return;
+    try {
+      const pedido = JSON.parse(evento.newValue);
+      if (carregar()) processarPedidoDeEncerramento(pedido);
+    } catch (erro) {}
+  });
+return {
       geradoEm: Date.now(),
       estado: { faseAtual: estado.faseAtual, fases: estado.fases, historico: estado.historico }
     };
@@ -501,6 +556,7 @@ const Fila = (function () {
   // abre um sorteio recebido já no ponto em que a outra pessoa parou
   function iniciarComAndamento(novoPlano, linhas, formulario, andamento) {
     plano = novoPlano;
+    if (!plano.id) plano.id = gerarIdPlano();
     linhasDoSorteio = linhas;
     formularioDoSorteio = formulario || null;
     estado = andamento.estado;      // já validado e com a pilha de desfazer vazia
@@ -512,6 +568,17 @@ const Fila = (function () {
     return estado ? estado.historico.length : 0;
   }
 
+  window.addEventListener('storage', evento => {
+    if (evento.key === CHAVE_STORAGE) {
+      carregar();
+      return;
+    }
+    if (evento.key !== CHAVE_PEDIDO_PLACAR || !evento.newValue) return;
+    try {
+      const pedido = JSON.parse(evento.newValue);
+      if (carregar()) processarPedidoDeEncerramento(pedido);
+    } catch (erro) {}
+  });
 return {
     iniciar: iniciar,
     carregar: carregar,
@@ -519,7 +586,9 @@ return {
     obterSorteio: obterSorteio,
     obterAndamento: obterAndamento,
     iniciarComAndamento: iniciarComAndamento,
-    quantidadeDeJogos: quantidadeDeJogos
+    quantidadeDeJogos: quantidadeDeJogos,
+    processarPedidoPendente: processarPedidoPendente
   };
 
 })();
+window.Fila = Fila;

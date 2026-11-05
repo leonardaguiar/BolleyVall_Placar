@@ -575,6 +575,7 @@
     if(salvo){
       lines = salvo.linhas;
       aplicarFormulario(salvo.formulario);
+      Fila.processarPedidoPendente();
       mostrarResultado(false);
       Compartilhar.prepararLink();
     }

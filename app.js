@@ -30,11 +30,13 @@
 
   // --- auto-save (rede de segurança contra a aba ser descartada pelo sistema testado no Android e Iphone) ---
   const STORAGE_KEY = 'placar-volei-state-v1';
+  let activeMatchKey = null;
   function saveState(){
     try{
       const css = getComputedStyle(document.documentElement);
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         a: state.a, b: state.b, seconds: state.seconds, running: state.running,
+        matchKey: activeMatchKey,
         nameA: nameEl.a.textContent, nameB: nameEl.b.textContent,
         colorA: css.getPropertyValue('--team-a').trim(),
         colorADim: css.getPropertyValue('--team-a-dim').trim(),
@@ -44,27 +46,99 @@
     }catch(e){ /* localStorage indisponível (ex: modo privado) — ignora */ }
   }
   function loadState(){
+    const partida = readActiveMatch();
+    activeMatchKey = partida ? partida.chave : null;
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
-      if(!raw) return;
+      if(!raw){
+        if(partida){
+          nameEl.a.textContent = partida.nomes[0];
+          nameEl.b.textContent = partida.nomes[1];
+          saveState();
+        }
+        return;
+      }
       const s = JSON.parse(raw);
-      state.a = s.a||0; state.b = s.b||0; state.seconds = s.seconds||0;
+      const mesmaPartida = !partida || s.matchKey === partida.chave;
+      state.a = mesmaPartida ? (s.a||0) : 0;
+      state.b = mesmaPartida ? (s.b||0) : 0;
+      state.seconds = mesmaPartida ? (s.seconds||0) : 0;
       scoreEl.a.textContent = state.a; scoreEl.b.textContent = state.b;
       fitScore('a'); fitScore('b');
-      timerEl.textContent = fmt(state.seconds);      
-      if(s.nameA) nameEl.a.textContent = s.nameA;
-      if(s.nameB) nameEl.b.textContent = s.nameB;
+      timerEl.textContent = fmt(state.seconds);
+      if(partida){
+        nameEl.a.textContent = partida.nomes[0];
+        nameEl.b.textContent = partida.nomes[1];
+      }else{
+        if(s.nameA) nameEl.a.textContent = s.nameA;
+        if(s.nameB) nameEl.b.textContent = s.nameB;
+      }
       if(s.colorA) document.documentElement.style.setProperty('--team-a', s.colorA);
       if(s.colorADim) document.documentElement.style.setProperty('--team-a-dim', s.colorADim);
       if(s.colorB) document.documentElement.style.setProperty('--team-b', s.colorB);
       if(s.colorBDim) document.documentElement.style.setProperty('--team-b-dim', s.colorBDim);
-      if(s.running) startTimer();
+      if(s.running && mesmaPartida) startTimer();
+      if(partida && !mesmaPartida) saveState();
     }catch(e){ /* estado salvo corrompido — ignora e segue com o padrão */ }
   }
   function clearState(){
     try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
   }
 
+  // --- equipes da partida atual (salvas pelo acompanhamento do sorteio) ---
+  const TRACKER_STORAGE_KEY = 'sorteio-acompanhamento-v1';
+  const END_MATCH_REQUEST_KEY = 'placar-encerrar-partida-v1';
+  function readActiveMatch(){
+    try{
+      const salvo = JSON.parse(localStorage.getItem(TRACKER_STORAGE_KEY) || 'null');
+      if(!salvo || !salvo.plano || !salvo.estado) return null;
+      const indice = salvo.estado.faseAtual;
+      const fase = salvo.plano.fases && salvo.plano.fases[indice];
+      const andamento = salvo.estado.fases && salvo.estado.fases[indice];
+      if(!fase || !andamento || !Array.isArray(andamento.quadra) || andamento.quadra.length !== 2) return null;
+      if(fase.modo === 'jogo' && andamento.vencedor !== null && andamento.vencedor !== undefined) return null;
+      const nomes = andamento.quadra.map(id => fase.times[id] && fase.times[id].join(' + '));
+      if(nomes.some(nome => !nome)) return null;
+      return {
+        nomes: nomes,
+        planoId: salvo.plano.id || '',
+        faseAtual: indice,
+        jogos: andamento.jogos || 0,
+        quadra: andamento.quadra.slice(),
+        chave: JSON.stringify([salvo.plano.id || '', indice, andamento.jogos || 0, nomes])
+      };
+    }catch(e){ return null; }
+  }
+  function syncActiveMatch(){
+    const partida = readActiveMatch();
+    if(!partida) return;
+    let chaveSalva = null;
+    try{
+      const salvo = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      chaveSalva = salvo && salvo.matchKey;
+    }catch(e){}
+    if(activeMatchKey === partida.chave){
+      nameEl.a.textContent = partida.nomes[0];
+      nameEl.b.textContent = partida.nomes[1];
+      return;
+    }
+    const partidaMudou = chaveSalva !== partida.chave;
+    activeMatchKey = partida.chave;
+    nameEl.a.setAttribute('contenteditable','false');
+    nameEl.b.setAttribute('contenteditable','false');
+    nameEl.a.textContent = partida.nomes[0];
+    nameEl.b.textContent = partida.nomes[1];
+    if(partidaMudou){
+      state.a = 0; state.b = 0; state.seconds = 0; state.running = false;
+      clearInterval(timerInterval);
+      timerInterval = null;
+      timerEl.classList.remove('running');
+      scoreEl.a.textContent = '0'; scoreEl.b.textContent = '0';
+      fitScore('a'); fitScore('b');
+      timerEl.textContent = '00:00';
+    }
+    saveState();
+  }
   function fmt(s){
     const m = Math.floor(s/60).toString().padStart(2,'0');
     const r = (s%60).toString().padStart(2,'0');
@@ -120,6 +194,7 @@
   [ ['a', nameEl.a], ['b', nameEl.b] ].forEach(([key, el])=>{
     el.addEventListener('click', e=>{
       e.stopPropagation();
+      if(activeMatchKey) return;
       el.setAttribute('contenteditable','true');
       el.focus();
       document.execCommand('selectAll', false, null);
@@ -169,18 +244,66 @@
   });
 
   const overlay = document.getElementById('modalOverlay');
-  document.getElementById('resetBtn').addEventListener('click', ()=> overlay.classList.add('open'));
-  document.getElementById('cancelReset').addEventListener('click', ()=> overlay.classList.remove('open'));
-  document.getElementById('confirmReset').addEventListener('click', ()=>{
+  const resetMessage = document.getElementById('resetMessage');
+  const confirmReset = document.getElementById('confirmReset');
+  function resetScore(){
     state.a = 0; state.b = 0; state.seconds = 0;
     scoreEl.a.textContent = 0; scoreEl.b.textContent = 0;
     pauseTimer();
     timerEl.textContent = '00:00';
     overlay.classList.remove('open');
-    clearState();
+    saveState();
+  }
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    const partida = readActiveMatch();
+    resetMessage.textContent = partida
+      ? 'Deseja encerrar a partida? O time com mais pontos será marcado como vencedor.'
+      : 'Não há sorteio em andamento. Deseja zerar o placar e o cronômetro?';
+    confirmReset.textContent = partida ? 'Encerrar' : 'Zerar';
+    overlay.classList.add('open');
+  });
+  document.getElementById('cancelReset').addEventListener('click', ()=> overlay.classList.remove('open'));
+  confirmReset.addEventListener('click', ()=>{
+    const partida = readActiveMatch();
+    if(partida){
+      if(activeMatchKey !== partida.chave){
+        overlay.classList.remove('open');
+        syncActiveMatch();
+        alert('A partida mudou. Confira o placar atualizado antes de encerrar.');
+        return;
+      }
+      if(state.a === state.b){
+        overlay.classList.remove('open');
+        alert('O placar está empatado. Some pontos para definir um vencedor antes de encerrar.');
+        return;
+      }
+      const pedido = {
+        id: 'encerrar-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+        planoId: partida.planoId,
+        faseAtual: partida.faseAtual,
+        jogos: partida.jogos,
+        quadra: partida.quadra,
+        idVencedor: partida.quadra[state.a > state.b ? 0 : 1]
+      };
+      try{
+        localStorage.setItem(END_MATCH_REQUEST_KEY, JSON.stringify(pedido));
+      }catch(e){
+        alert('Não foi possível registrar o vencedor neste aparelho. O placar foi mantido.');
+        return;
+      }
+      if(!window.Fila || !window.Fila.processarPedidoPendente()){
+        overlay.classList.remove('open');
+        alert('Não foi possível registrar o vencedor. O placar foi mantido.');
+        return;
+      }
+      syncActiveMatch();
+    }
+    resetScore();
   });
 
   loadState();
+  syncActiveMatch();
+  window.addEventListener('storage', e=>{ if(e.key===TRACKER_STORAGE_KEY) syncActiveMatch(); });
   //Esse trecho abaixo de instalação não sei se funciona no Iphone
   const installBtn = document.getElementById('installBtn');
   const installOverlay = document.getElementById('installOverlay');
